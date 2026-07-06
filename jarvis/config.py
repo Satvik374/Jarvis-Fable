@@ -46,6 +46,10 @@ class BrainConfig:
     # Defaults to True for Gemini backend.
     use_vision: bool = True
     request_timeout: int = 120
+    # Let Jarvis answer plain conversation (greetings, small talk, general
+    # questions) directly, with no tools/perception. Set false to force every
+    # input through the computer-control loop.
+    conversational: bool = True
 
 
 @dataclass
@@ -88,6 +92,9 @@ class DataConfig:
     # Cap on memory.txt size (chars). Oldest learned entries are dropped first
     # so the system prompt never bloats.
     memory_max_chars: int = 4000
+    # Conversational memory: how many recent (user prompt, Jarvis response)
+    # exchanges to feed back in for continuity across tasks/sessions.
+    chat_history_turns: int = 10
 
 
 @dataclass

@@ -12,6 +12,10 @@ dataset/data/screenshots/
 dataset/data/trajectories/
 *.log
 
+# Persistent memory (per-machine; not source)
+memory.txt
+chat_memory.jsonl
+
 # Generated dataset (regenerate with dataset/build_dataset.py) - keep small samples out of git
 dataset/data/*.jsonl
 

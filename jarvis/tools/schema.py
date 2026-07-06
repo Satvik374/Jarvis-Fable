@@ -164,11 +164,20 @@ ACTIONS: tuple[Action, ...] = (
         category="files", examples=({"path": "~/notes.txt"},),
     ),
     Action(
-        "write_file", "Create or overwrite a UTF-8 text file.",
-        (Param("path", "str", "Destination path."),
+        "write_file", "Create or overwrite a UTF-8 text file (use for code too).",
+        (Param("path", "str", "Destination path; parent folders are auto-created."),
          Param("content", "str", "Full file content.")),
         category="files",
-        examples=({"path": "~/todo.txt", "content": "buy milk"},),
+        examples=({"path": "~/todo.txt", "content": "buy milk"},
+                  {"path": "~/projects/app/main.py",
+                   "content": "print('hello world')\n"}),
+    ),
+    Action(
+        "make_dir", "Create a folder (and any missing parent folders).",
+        (Param("path", "str", "Folder path to create."),),
+        category="files",
+        examples=({"path": "~/projects/myapp"},
+                  {"path": "~/projects/myapp/src"}),
     ),
     Action(
         "list_dir", "List the entries of a directory.",

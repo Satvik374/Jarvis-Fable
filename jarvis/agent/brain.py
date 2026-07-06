@@ -471,31 +471,43 @@ class GeminiVertexBrain(Brain):
 
         import requests as _req  # type: ignore
 
-        try:
-            r = _req.post(url, json=payload, headers=headers,
-                          timeout=self.cfg.request_timeout)
-        except Exception as exc:
-            raise BrainError(
-                f"Vertex AI Gemini API request failed: {exc}") from exc
-        if not r.ok:
-            try:
-                err_details = f" - Details: {r.text[:500]}"
-            except Exception:
-                err_details = ""
-            raise BrainError(
-                f"Vertex AI Gemini API returned HTTP {r.status_code}{err_details}")
-        data = r.json()
+        # Gemini sometimes returns an EMPTY candidate with finishReason
+        # RECITATION (its copyright filter matching benign output) or OTHER.
+        # That is transient: retrying with slightly different sampling almost
+        # always succeeds - so retry instead of killing the whole task.
+        last_err = ""
+        for attempt in range(3):
+            if attempt:
+                payload["generationConfig"]["temperature"] = min(
+                    1.0, max(self.cfg.temperature, 0.2) + 0.35 * attempt)
 
-        try:
+            try:
+                r = _req.post(url, json=payload, headers=headers,
+                              timeout=self.cfg.request_timeout)
+            except Exception as exc:
+                raise BrainError(
+                    f"Vertex AI Gemini API request failed: {exc}") from exc
+            if not r.ok:
+                try:
+                    err_details = f" - Details: {r.text[:500]}"
+                except Exception:
+                    err_details = ""
+                raise BrainError(
+                    f"Vertex AI Gemini API returned HTTP {r.status_code}{err_details}")
+            data = r.json()
+
             candidates = data.get("candidates", [])
-            if not candidates:
-                raise BrainError("No candidates returned from Gemini API. The response might have been blocked.")
-            content = candidates[0].get("content", {})
-            parts = content.get("parts", [])
-            if not parts:
-                finish_reason = candidates[0].get("finishReason")
-                raise BrainError(f"Empty content from Gemini. Finish reason: {finish_reason}")
-            return parts[0].get("text", "")
-        except KeyError as e:
-            raise BrainError(f"Unexpected response format from Vertex AI: {data}") from e
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                # Join every text part; skip "thought" parts (2.5+ models).
+                text = "".join(p.get("text", "") for p in parts
+                               if isinstance(p, dict) and not p.get("thought"))
+                if text.strip():
+                    return text
+                finish = candidates[0].get("finishReason", "UNKNOWN")
+            else:
+                finish = "NO_CANDIDATES (response might have been blocked)"
+            last_err = f"Empty content from Gemini. Finish reason: {finish}"
+
+        raise BrainError(last_err + " (after 3 attempts)")
 

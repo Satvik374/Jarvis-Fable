@@ -19,6 +19,8 @@ brain:
   # Keep vision ON to allow Gemini 3.5 Flash to analyze screen images natively.
   use_vision: true
   request_timeout: 120
+  # Answer plain conversation (greetings, small talk) directly, no tools.
+  conversational: true
 
 perception:
   # Keep UIA ON even with Gemini vision: element ids give pixel-perfect clicks,
@@ -40,3 +42,4 @@ data:
   # model call per finished task; prevents fake successes from being learned.
   verify_success: true
   memory_max_chars: 4000                 # cap memory.txt so the prompt stays lean
+  chat_history_turns: 10                 # recent prompt+response pairs remembered

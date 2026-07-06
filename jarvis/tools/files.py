@@ -56,6 +56,19 @@ def write_file(path: str, content: str, allow: tuple[str, ...] = ()) -> str:
         return f"could not write {p}: {exc}"
 
 
+def make_dir(path: str, allow: tuple[str, ...] = ()) -> str:
+    p = _expand(path)
+    if not _within(p, allow):
+        return (f"refused: {p} is outside allowed write locations "
+                f"(home dir + configured allow_paths)")
+    try:
+        existed = p.is_dir()
+        p.mkdir(parents=True, exist_ok=True)
+        return f"folder already exists: {p}" if existed else f"created folder {p}"
+    except Exception as exc:
+        return f"could not create {p}: {exc}"
+
+
 def list_dir(path: str = ".") -> str:
     p = _expand(path)
     if not p.exists():

@@ -104,6 +104,52 @@ def jarvis(msg: str) -> None:
     print(f"\n{badge}{_COLORS['reset']} {msg}\n")
 
 
+class spinner:
+    """Live one-line spinner for slow operations (model calls).
+
+        with log.spinner("thinking"):
+            brain.complete(...)
+
+    Shows `* thinking 7s` with an animated glyph, clears itself on exit.
+    No-op when stdout is not a TTY (tests, pipes) so output stays clean.
+    """
+
+    _FRAMES = "|/-\\" if _ASCII else "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+    def __init__(self, label: str = "thinking"):
+        self.label = label
+        self._stop = None
+        self._thread = None
+
+    def __enter__(self):
+        if not sys.stdout.isatty():
+            return self
+        import threading
+        self._stop = threading.Event()
+
+        def _spin():
+            t0, i = time.time(), 0
+            while not self._stop.wait(0.12):
+                frame = _c(self._FRAMES[i % len(self._FRAMES)], "cyan")
+                line = f"  {frame} {_c(self.label, 'dim')} {_c(f'{time.time()-t0:.0f}s', 'grey')}"
+                sys.stdout.write("\r" + line + "   ")
+                sys.stdout.flush()
+                i += 1
+
+        self._thread = threading.Thread(target=_spin, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        if self._stop is not None:
+            self._stop.set()
+            self._thread.join(timeout=0.5)
+            # wipe the spinner line so the next log starts clean
+            sys.stdout.write("\r" + " " * (_width() - 1) + "\r")
+            sys.stdout.flush()
+        return False
+
+
 def pop(success: bool = True) -> None:
     """Short 'task finished' sound so you know Jarvis stopped without watching.
 

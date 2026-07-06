@@ -14,6 +14,7 @@ Every step is logged via :class:`TrajectoryWriter` so real runs become data.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from ..config import Config
@@ -33,6 +34,10 @@ class Agent:
         self.brain = brain
         self.cfg = cfg
         self.memory_path = Path(__file__).resolve().parent.parent.parent / "memory.txt"
+        # Conversational memory: only (user prompt, Jarvis response) pairs,
+        # persisted across sessions. Kept separate from the learned-plan
+        # memory.txt so thoughts and plans never leak into the chat history.
+        self.chat_path = Path(__file__).resolve().parent.parent.parent / "chat_memory.jsonl"
         self.writer = TrajectoryWriter(
             cfg.data.trajectory_dir, enabled=cfg.data.collect_trajectories)
         self._shot_dir = Path("dataset/data/screenshots")
@@ -62,7 +67,8 @@ class Agent:
         )
         messages = [{"role": "user", "content": f"Task: {task}"}]
         try:
-            raw = self.brain.complete(system_prompt, messages)
+            with log.spinner("planning"):
+                raw = self.brain.complete(system_prompt, messages)
             raw_clean = raw.strip()
             if raw_clean.startswith("```"):
                 raw_clean = raw_clean.split("```", 2)[1]
@@ -96,9 +102,20 @@ class Agent:
         task actually completed on screen. ask/cancel/brain-error end the whole
         run immediately - they are not "plan failures" to retry past.
         """
-        log.step(f"Task: {task}")
-
         memory = self._read_memory()
+        chat_note = self._chat_context()   # persistent user<->Jarvis history
+
+        # Plain conversation (greeting, small talk, a question that needs no
+        # computer access) -> reply directly with NO tools/perception/planning.
+        # Commands that clearly control the computer skip this entirely, and the
+        # classifier is conservative, so existing control behaviour is untouched.
+        if not self._looks_like_task(task):
+            reply = self._maybe_chat(task, chat_note)
+            if reply is not None:
+                self._append_chat(task, reply)
+                return reply
+
+        log.step(f"Task: {task}")
         reexplored = False     # #3: only re-plan once after evicting a stale plan
 
         # Generate candidate solutions (or reuse a learned plan from memory)
@@ -128,7 +145,7 @@ class Agent:
                               + ". Try this alternative approach from the current screen state.")
             plan_note += "\n===================================="
 
-            system = build_system_prompt(memory) + plan_note
+            system = build_system_prompt(memory) + chat_note + plan_note
 
             traj = Trajectory(task=task, backend=self.cfg.brain.backend,
                               model=self.cfg.brain.model)
@@ -144,7 +161,8 @@ class Agent:
                 messages_for_turn = self._with_observation(messages, obs)
 
                 try:
-                    raw = self.brain.complete(system, messages_for_turn, image=image)
+                    with log.spinner(f"thinking (step {step_i}/{self.cfg.safety.max_steps})"):
+                        raw = self.brain.complete(system, messages_for_turn, image=image)
                 except KeyboardInterrupt:
                     # Ctrl+C mid-task: keep the partial trajectory as data
                     # instead of silently losing the whole run.
@@ -316,6 +334,8 @@ class Agent:
         if successful_plan:
             self._append_memory(task, successful_plan)
 
+        # Remember the exchange (prompt + response only - no thoughts/plans).
+        self._append_chat(task, final_message)
         log.pop(success=bool(successful_plan))   # audible "task finished" cue
         return final_message
 
@@ -357,8 +377,9 @@ class Agent:
                 f"CURRENT SCREEN:\nACTIVE WINDOW: {obs.active_window or '(desktop)'}\n"
                 f"ELEMENTS:\n{obs.menu()}\n\nDid the task complete? Reply with the JSON verdict.")
         try:
-            raw = self.brain.complete(system, [{"role": "user", "content": user}],
-                                      image=image)
+            with log.spinner("verifying"):
+                raw = self.brain.complete(system, [{"role": "user", "content": user}],
+                                          image=image)
         except Exception as exc:
             log.warn(f"verifier unavailable: {exc}")
             return None, "verifier call failed"
@@ -426,6 +447,109 @@ class Agent:
         except Exception as exc:
             log.warn(f"Failed to save successful plan to memory: {exc}")
 
+    # -- plain conversation (no tools) --------------------------------- #
+    _TASK_VERBS = frozenset((
+        "open", "close", "click", "type", "press", "scroll", "select", "copy",
+        "paste", "cut", "run", "launch", "start", "play", "pause", "stop",
+        "search", "find", "go", "goto", "navigate", "download", "upload",
+        "save", "delete", "remove", "move", "drag", "switch", "maximize",
+        "minimize", "screenshot", "focus", "enter", "write", "refresh",
+        "reload", "zoom", "hover", "rightclick", "doubleclick",
+    ))
+
+    def _looks_like_task(self, task: str) -> bool:
+        # Imperative computer commands start with an action verb, so route them
+        # straight to the control loop without paying for a classifier call.
+        # ponytail: verb prefix, not NLP - high precision so no command is ever
+        # mistaken for chat.
+        words = task.strip().lower().lstrip("!.,?-").split()
+        return bool(words) and words[0] in self._TASK_VERBS
+
+    def _maybe_chat(self, task: str, chat_note: str = "") -> str | None:
+        """Answer plain conversation directly, with NO tools or perception.
+
+        Returns a friendly reply when the message is ordinary chat, or None
+        when it is a computer task (the caller then runs the normal loop).
+        Conservative: on any doubt or error it returns None so the existing
+        computer-control behaviour always wins.
+        """
+        if not self.cfg.brain.conversational:
+            return None
+        system = (
+            "You are JARVIS, a warm and concise assistant that can also control "
+            "the user's Windows computer. Decide whether the user's message is "
+            "ordinary CONVERSATION you can answer with no access to their "
+            "computer (greetings, thanks, small talk, general questions like "
+            "'who are you' or 'what is 2+2'), or a TASK that needs you to look "
+            "at or control their computer (open/click/type/search/play/read the "
+            "screen, anything on their machine). If unsure, choose task.\n"
+            "Reply with ONE JSON object and nothing else:\n"
+            '  {"mode":"chat","reply":"<friendly reply>"}   or   {"mode":"task"}'
+        )
+        messages: list[dict] = []
+        if chat_note:
+            messages.append({"role": "user", "content": "Recent conversation:" + chat_note})
+        messages.append({"role": "user", "content": task})
+        try:
+            with log.spinner("thinking"):
+                raw = self.brain.complete(system, messages)
+        except Exception:
+            return None
+        obj = _extract_json(raw)
+        if isinstance(obj, dict) and str(obj.get("mode", "")).lower() == "chat":
+            reply = str(obj.get("reply", "")).strip()
+            if reply:
+                return reply
+        return None
+
+    # -- conversational memory: prompt + response only ----------------- #
+    def _load_chat(self) -> list[dict]:
+        if not self.chat_path.exists():
+            return []
+        out: list[dict] = []
+        try:
+            for line in self.chat_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line:
+                    try:
+                        out.append(json.loads(line))
+                    except Exception:
+                        continue
+        except Exception as exc:
+            log.warn(f"Failed to read chat memory: {exc}")
+        return out
+
+    def _chat_context(self) -> str:
+        """Recent conversation, injected so Jarvis has continuity across tasks
+        and sessions. Contains only what the user said and what Jarvis replied.
+        """
+        pairs = self._load_chat()[-self.cfg.data.chat_history_turns:]
+        lines = []
+        for p in pairs:
+            u, j = (p.get("user") or "").strip(), (p.get("jarvis") or "").strip()
+            if u:
+                lines.append(f"User: {u}")
+            if j:
+                lines.append(f"Jarvis: {j}")
+        if not lines:
+            return ""
+        return ("\n\n=== EARLIER CONVERSATION (context only; may be from previous "
+                "sessions) ===\n" + "\n".join(lines) +
+                "\n=========================================================")
+
+    def _append_chat(self, user: str, response: str) -> None:
+        rec = {"ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+               "user": (user or "").strip(), "jarvis": (response or "").strip()}
+        try:
+            pairs = self._load_chat()
+            pairs.append(rec)
+            pairs = pairs[-200:]   # ponytail: hard cap so the log never grows unbounded
+            with self.chat_path.open("w", encoding="utf-8") as fh:
+                for p in pairs:
+                    fh.write(json.dumps(p, ensure_ascii=False) + "\n")
+        except Exception as exc:
+            log.warn(f"Failed to save chat memory: {exc}")
+
     # ------------------------------------------------------------------ #
     def _perceive(self):
         obs = elem_mod.observe(
@@ -476,4 +600,12 @@ class Agent:
 
 
 def _fmt_args(args: dict) -> str:
-    return ", ".join(f"{k}={v!r}" for k, v in (args or {}).items())
+    """Compact one-line arg display; long values (file content, big text) are
+    truncated so a write_file never floods the console."""
+    parts = []
+    for k, v in (args or {}).items():
+        r = repr(v)
+        if len(r) > 80:
+            r = r[:77] + "..."
+        parts.append(f"{k}={r}")
+    return ", ".join(parts)

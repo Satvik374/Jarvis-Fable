@@ -238,6 +238,14 @@ def _h_list_dir(args, obs, cfg):
                         needs_observe=False)
 
 
+def _h_make_dir(args, obs, cfg):
+    return ActionResult(
+        True,
+        files.make_dir(str(args.get("path", "")), allow=cfg.safety.allow_paths),
+        needs_observe=False,
+    )
+
+
 def _h_clipboard_read(args, obs, cfg):
     return ActionResult(True, "clipboard: " + system.clipboard_read(),
                         needs_observe=False)
@@ -285,6 +293,7 @@ _HANDLERS = {
     "run_command": _h_run_command,
     "read_file": _h_read_file,
     "write_file": _h_write_file,
+    "make_dir": _h_make_dir,
     "list_dir": _h_list_dir,
     "clipboard_read": _h_clipboard_read,
     "clipboard_write": _h_clipboard_write,
