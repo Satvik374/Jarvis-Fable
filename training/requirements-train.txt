@@ -1,0 +1,21 @@
+# Training dependencies - install into a SEPARATE environment from the app.
+# These are large. On Windows with an RTX 2050 (CUDA), install a CUDA build of
+# torch first, then the rest.
+
+# 1) PyTorch with CUDA (pick the index-url for your CUDA; cu121 is a safe default):
+#    pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+# 2) Core training stack:
+transformers>=4.45
+datasets>=2.20
+peft>=0.13
+trl>=0.11
+accelerate>=0.34
+bitsandbytes>=0.43        # 4-bit quantization (Windows wheels exist on recent versions)
+sentencepiece>=0.2
+protobuf>=4.25
+
+# 3) STRONGLY recommended on 4 GB VRAM - halves memory, speeds training,
+#    and can export GGUF directly:
+#    pip install "unsloth[cu121-torch240] @ git+https://github.com/unslothai/unsloth.git"
+# unsloth

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# Jarvis runtime artifacts
+dataset/data/screenshots/
+dataset/data/trajectories/
+*.log
+
+# Generated dataset (regenerate with dataset/build_dataset.py) - keep small samples out of git
+dataset/data/*.jsonl
+
+# Training outputs
+training/outputs/
+training/checkpoints/
+*.gguf
+*.safetensors
+*.bin
+
+# Models / caches
+.ollama/
+models/
+
+# uiautomation stray log (redirected to %LOCALAPPDATA%\Jarvis, but just in case)
+@AutomationLog.txt
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

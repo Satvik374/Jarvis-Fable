@@ -1,0 +1,42 @@
+# Jarvis configuration.  Defaults are tuned for RTX 2050 / 4 GB VRAM / 8 GB RAM.
+# Environment variables (JARVIS_BACKEND, JARVIS_MODEL, JARVIS_BASE_URL,
+# JARVIS_VISION, JARVIS_CONFIRM) override anything here.
+
+brain:
+  # backend: gemini | ollama | hf | llamacpp | openai | anthropic
+  backend: gemini
+  # The model Vertex AI/Ollama serves.
+  model: gemini-3.5-flash
+  adapter_path: ""      # only for backend "hf": path to your trained LoRA
+  base_url: ""
+
+  # --- To run YOUR fine-tuned model directly (no Ollama needed), use: ---
+  # backend: hf
+  # model: Qwen/Qwen2.5-0.5B-Instruct          # the base you trained from
+  # adapter_path: training/outputs/jarvis-lora  # the adapter you trained
+  temperature: 0.2
+  max_tokens: 500000
+  # Keep vision ON to allow Gemini 3.5 Flash to analyze screen images natively.
+  use_vision: true
+  request_timeout: 120
+
+perception:
+  # Keep UIA ON even with Gemini vision: element ids give pixel-perfect clicks,
+  # vision alone is +/-50px guesswork. Vision + elements work together.
+  use_uia: true
+  use_ocr: false      # OCR fallback for canvases/games (installs easyocr+torch)
+  max_elements: 60    # cap on elements shown to the model (keeps prompt small)
+  save_screenshots: true   # annotated shots saved for debugging + dataset
+
+safety:
+  confirm_each_action: false  # set true while you build trust in the model
+  max_steps: 50               # hard stop to prevent runaway loops
+
+data:
+  collect_trajectories: true             # log real runs as training data
+  trajectory_dir: dataset/data/trajectories
+  # Reinforcement learning: verify a claimed "finish" against the final screen
+  # before rewarding the plan (memory write + success label). Costs one extra
+  # model call per finished task; prevents fake successes from being learned.
+  verify_success: true
+  memory_max_chars: 4000                 # cap memory.txt so the prompt stays lean

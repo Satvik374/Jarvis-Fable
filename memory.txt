@@ -1,0 +1,35 @@
+- Learned Task: Go to replit.com and go to my most recent project and then check the website and then prompt the Replit AI to make changes according to you that will be good
+  Successful Plan: Plan 1: Direct Browser Navigation and Manual AI Prompting
+  Approach: Open the default web browser, navigate to replit.com, and log in if necessary. Click on the 'My Repls' or 'Recent' section to open the most recent project. Run the project to view the current website output. Analyze the website's design and functionality, then open the Replit AI chat panel in the workspace and type a specific prompt instructing it to implement identified improvements.
+
+- Learned Task: Now Go to Gemini In Browser and prompt the gemini to make this same app that Replit built and make sure the canvas mode in enabled in gemini
+  Successful Plan: Plan 1: Direct URL Navigation and Canvas Activation
+  Approach: Open the default web browser, navigate directly to gemini.google.com, locate the settings or feature toggle menu to ensure 'Canvas' mode is enabled, and then paste the prompt describing the app previously built in Replit into the chat input.
+
+- Learned Task: switch the gemini account to moraltagaming gmail account
+  Successful Plan: Plan 1: Via Profile Picture Menu on Current Page
+  Approach: Click on the Google profile picture in the top-right corner of the Gemini interface, look for the 'moraltagaming' Gmail account in the dropdown list, click it to switch accounts, and wait for the page to reload under the new account.
+
+- Learned Task: Open Comet browser and then open spotify, then play my own "Peace" playlist on left side library sidebar
+  Successful Plan: Plan 1: Via Desktop Shortcuts and UI Navigation
+  Approach: Double-click the Comet browser desktop shortcut, navigate to Spotify via a bookmark or by typing the URL, log in if necessary, locate the 'Your Library' sidebar on the left, scroll to find the 'Peace' playlist, click it, and click the play button.
+
+- Learned Task: Jarvis , Go to Amazon on Browser, Search for Best Gaming Keyboards, And find a best gaming keyboard under 450 rupees and add it to cart.
+  Successful Plan: Default Action Path
+  Approach: Execute the task directly using standard operations.
+
+- Learned Task: Now Go to github , open my Buildora Repository , then clone its .git URL , Then Open Powersheel and clone that Repository in my downloads folder
+  Successful Plan: Plan 1: Via Web Browser GUI and PowerShell
+  Approach: Open the default web browser, navigate to 'https://github.com', log in if necessary, search for and open the 'Buildora' repository, click the green 'Code' button, and copy the HTTPS clone URL. Then, press Win+R, type 'powershell' and press Enter. In PowerShell, type 'cd ~/Downloads' and press Enter, then type 'git clone ' followed by pasting the copied URL, and press Enter to execute.
+
+- Learned Task: Change the "Buildora-2" Name to just "Buildora"
+  Successful Plan: Plan 3: Via PowerShell
+  Approach: Right-click the Start button and select 'Windows PowerShell'. Use the command 'Rename-Item -Path "C:\Path\To\Buildora-2" -NewName "Buildora"' to perform the rename.
+
+- Learned Task: Go to pinmx.com and create a email id there
+  Successful Plan: Plan 2: Search Engine Routing and Account Creation
+  Approach: Open the web browser, navigate to a search engine like Google, search for 'pinmx email registration', and click the most relevant official link. Once on the pinmx.com registration page, complete the sign-up form with the necessary credentials to establish the new email account.
+
+- Learned Task: Research latest AI News for me
+  Successful Plan: Plan 1: Web Browser Search and Aggregation
+  Approach: Press the win key, type 'chrome' or 'edge', and press enter to open the browser. Navigate to Google News or Bing News, search for 'latest AI news', and extract the top headlines and links into a text file on the desktop.

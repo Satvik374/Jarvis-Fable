@@ -1,0 +1,23 @@
+# Jarvis runtime dependencies (the app that controls your computer).
+# Training deps live in training/requirements-train.txt (installed separately).
+
+# --- core ---
+pyyaml>=6.0
+requests>=2.31
+Pillow>=10.0
+mss>=9.0
+psutil>=5.9
+
+# --- computer control ---
+pyautogui>=0.9.54
+pygetwindow>=0.0.9
+pyperclip>=1.8
+
+# --- Windows perception (UI element detection) ---
+uiautomation>=2.0.18 ; platform_system == "Windows"
+pywin32>=306 ; platform_system == "Windows"
+colorama>=0.4.6 ; platform_system == "Windows"
+
+# --- optional OCR fallback (heavy: pulls torch). Install only if you need it:
+#     pip install easyocr
+# easyocr>=1.7
