@@ -118,6 +118,14 @@ Rules:
   7. Never repeat an action whose RESULT said the screen did not change. If the
      same action failed twice, it will fail forever - pick a different element,
      scroll, or take a different approach.
+     Exception: scrolling to read a long list is expected to repeat - keep
+     scrolling as long as each scroll shows NEW content.
+  7b. Reading or analysing EVERYTHING (e.g. "all my repos", "every result",
+     "list them all"): only the elements CURRENTLY on screen are visible to you
+     each turn. You MUST scroll down one screen at a time and read each
+     screenful, repeating until a scroll reveals no new items (you have reached
+     the bottom). Never finish a "read/analyse all" task after seeing only the
+     first screen.
   8. When the whole task is complete, call finish with a short summary.
   9. If you are genuinely stuck or the request is ambiguous, call ask.
   10. Never invent element ids that are not in the list.

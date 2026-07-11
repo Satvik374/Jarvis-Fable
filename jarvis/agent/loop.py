@@ -33,14 +33,20 @@ class Agent:
     def __init__(self, brain: Brain, cfg: Config):
         self.brain = brain
         self.cfg = cfg
-        self.memory_path = Path(__file__).resolve().parent.parent.parent / "memory.txt"
+        proj_root = Path(__file__).resolve().parent.parent.parent
+        self.memory_path = proj_root / "memory.txt"
         # Conversational memory: only (user prompt, Jarvis response) pairs,
         # persisted across sessions. Kept separate from the learned-plan
         # memory.txt so thoughts and plans never leak into the chat history.
-        self.chat_path = Path(__file__).resolve().parent.parent.parent / "chat_memory.jsonl"
+        self.chat_path = proj_root / "chat_memory.jsonl"
+        # Anchor internal data dirs to the project root so Jarvis writes to the
+        # same place no matter which directory the `jarvis` command is run from.
+        traj_dir = Path(cfg.data.trajectory_dir)
+        if not traj_dir.is_absolute():
+            traj_dir = proj_root / traj_dir
         self.writer = TrajectoryWriter(
-            cfg.data.trajectory_dir, enabled=cfg.data.collect_trajectories)
-        self._shot_dir = Path("dataset/data/screenshots")
+            str(traj_dir), enabled=cfg.data.collect_trajectories)
+        self._shot_dir = proj_root / "dataset" / "data" / "screenshots"
 
     # ------------------------------------------------------------------ #
     def _generate_plans(self, task: str, memory: str = "") -> list[dict]:
@@ -54,6 +60,19 @@ class Agent:
                                     "recorded in PERSISTENT MEMORY for this exact task.",
                      "from_memory": True}]
 
+        # Lazy planning: the step loop is already adaptive, so most tasks finish
+        # on a direct attempt. Skip the up-front brainstorming LLM call (a full
+        # round-trip of latency before Jarvis does anything) and only pay for
+        # alternative plans if this first try fails (see the loop below).
+        return [{"name": "Direct Attempt",
+                 "description": "Execute the task directly using standard "
+                                "operations, choosing each action from the "
+                                "current screen state.",
+                 "provisional": True}]
+
+    def _brainstorm_plans(self, task: str) -> list[dict]:
+        """Ask the brain for alternative strategies. Only called after the
+        direct attempt fails, so its latency is off the common success path."""
         system_prompt = (
             "You are a strategic planning assistant. Propose up to 3 distinct, alternative plans "
             "to accomplish the user's desktop automation task. "
@@ -153,8 +172,9 @@ class Agent:
 
             plan_succeeded = False
             off_script = 0     # consecutive non-action replies from the model
-            prev_sig = None    # last executed (action, args) - loop detection
-            repeat_count = 0
+            last_changed = True    # did the previous action change the screen?
+            from collections import deque
+            recent_sigs: deque = deque(maxlen=8)   # loop detection window
 
             for step_i in range(1, self.cfg.safety.max_steps + 1):
                 image = self._maybe_image(obs, step_i)
@@ -201,17 +221,22 @@ class Agent:
                     continue
                 off_script = 0
 
-                # Loop detection: a model that re-emits the exact same action
-                # is stuck (e.g. clicking the address bar forever). Block the
-                # 3rd identical attempt with corrective feedback; abandon the
-                # plan on the 5th.
+                # Loop detection over a sliding window: catches both the same
+                # action repeated back-to-back AND two actions alternating
+                # A-B-A-B (e.g. clicking a stale element, focus jumps to
+                # another app, clicking back - forever). Block the 3rd
+                # occurrence of the same action within the window with
+                # corrective feedback; abandon the plan on the 5th.
                 sig = (decision.action,
                        json.dumps(decision.args, sort_keys=True, default=str))
-                if sig == prev_sig:
-                    repeat_count += 1
-                else:
-                    prev_sig, repeat_count = sig, 0
-                if (repeat_count >= 2
+                repeat_count = recent_sigs.count(sig)
+                recent_sigs.append(sig)
+                # Scrolling through a long list repeats the SAME scroll on
+                # purpose; while each scroll still reveals new content it is
+                # progress, not a stuck loop. Only once a scroll stops changing
+                # the screen (bottom reached) does the stuck-guard apply.
+                progressing_scroll = decision.action == "scroll" and last_changed
+                if (repeat_count >= 2 and not progressing_scroll
                         and decision.action not in {"finish", "ask", "wait", "observe"}):
                     if repeat_count >= 4:
                         log.warn("stuck repeating the same action; abandoning this plan.")
@@ -226,11 +251,13 @@ class Agent:
                                                                 decision.action,
                                                                 decision.args)})
                     messages.append({"role": "user", "content":
-                                     "RESULT: BLOCKED - you already did exactly this and "
-                                     "the screen did not change. Repeating it again will "
-                                     "not work. Choose a DIFFERENT action: type text if a "
-                                     "field is focused, press a key, scroll, pick another "
-                                     "element, or use open_url for websites."})
+                                     "RESULT: BLOCKED - you keep coming back to this exact "
+                                     "action and it is not making progress (possibly the "
+                                     "element's coordinates are wrong or focus keeps "
+                                     "jumping to another window). Do something DIFFERENT: "
+                                     "focus_window the app you need first, press a key, "
+                                     "scroll, pick another element, or use open_url for "
+                                     "websites."})
                     continue
 
                 if not self._confirm(decision):
@@ -290,8 +317,19 @@ class Agent:
 
                 if result.needs_observe:
                     before = obs.active_window + "\n" + obs.menu()
+                    editable = self._clicked_editable(decision, obs)
                     obs = self._perceive()
-                    if (obs.active_window + "\n" + obs.menu()) == before:
+                    last_changed = (obs.active_window + "\n" + obs.menu()) != before
+                    if not last_changed and editable:
+                        # Clicking a text/prompt box only sets focus + caret,
+                        # which never shows up in the element list. That is
+                        # success, not failure - tell the model to type, so it
+                        # does not re-click the box forever thinking it missed.
+                        messages[-1]["content"] += (
+                            " (note: the text field is now focused - the element "
+                            "list does not change when a field gains focus. This "
+                            "is expected; proceed to type, do NOT click it again.)")
+                    elif not last_changed:
                         # Explicit no-effect signal - without it a small model
                         # cannot tell that its click achieved nothing.
                         messages[-1]["content"] += (
@@ -315,12 +353,24 @@ class Agent:
 
             # #3 un-learn: a plan we REUSED from memory just failed, so the
             # stored recipe is stale (UI changed) or was a false-positive
-            # reward. Evict it and re-explore fresh instead of failing on a
-            # dead plan forever.
+            # reward. Evict it and brainstorm fresh alternatives instead of
+            # failing on a dead plan forever.
             if plan.get("from_memory") and not reexplored:
                 self._evict_memory(task)
                 memory = self._read_memory()            # stale entry gone, rest kept
-                plans = self._generate_plans(task, "")  # force fresh exploration
+                plans = self._brainstorm_plans(task)    # force fresh exploration
+                log.info(f"Re-planned: {len(plans)} alternative(s) to try.")
+                reexplored = True
+                idx = 0
+                obs = self._perceive()
+                continue
+
+            # Lazy planning: the direct attempt failed, so now (and only now)
+            # spend the LLM call to brainstorm alternative strategies to try.
+            if plan.get("provisional") and not reexplored:
+                plans = self._brainstorm_plans(task)
+                log.info(f"Direct attempt failed; brainstormed "
+                         f"{len(plans)} alternative plan(s).")
                 reexplored = True
                 idx = 0
                 obs = self._perceive()
@@ -585,6 +635,22 @@ class Agent:
         out = list(messages)
         out.append({"role": "user", "content": state})
         return out
+
+    # Roles that accept typed text: clicking one to focus it is a success even
+    # though the element list is unchanged (focus/caret never show up in UIA).
+    _EDITABLE_ROLES = frozenset({"Edit", "Document", "ComboBox"})
+
+    def _clicked_editable(self, decision, obs) -> bool:
+        if decision.action not in {"click", "double_click", "triple_click"}:
+            return False
+        el_id = decision.args.get("element")
+        if el_id is None:
+            return False
+        try:
+            el = obs.by_id(int(el_id))
+        except (TypeError, ValueError):
+            return False
+        return el is not None and el.role in self._EDITABLE_ROLES
 
     def _confirm(self, decision) -> bool:
         if not self.cfg.safety.confirm_each_action:
