@@ -13,10 +13,14 @@ pyautogui>=0.9.54
 pygetwindow>=0.0.9
 pyperclip>=1.8
 
+# --- web search (DuckDuckGo; handles the anti-bot handshake) ---
+ddgs>=6.0
+
 # --- Windows perception (UI element detection) ---
 uiautomation>=2.0.18 ; platform_system == "Windows"
 pywin32>=306 ; platform_system == "Windows"
 colorama>=0.4.6 ; platform_system == "Windows"
+sounddevice>=0.5.0 ; platform_system == "Windows"
 
 # --- optional OCR fallback (heavy: pulls torch). Install only if you need it:
 #     pip install easyocr

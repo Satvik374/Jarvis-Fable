@@ -1,32 +1,35 @@
-- Learned Task: Research latest AI News for me
-  Successful Plan: Plan 1: Web Browser Search and Aggregation
-  Approach: Press the win key, type 'chrome' or 'edge', and press enter to open the browser. Navigate to Google News or Bing News, search for 'latest AI news', and extract the top headlines and links into a text file on the desktop.
+- Learned Task: Go to GitHub
+  Successful Plan: Plan 1: Via Web Browser
+  Approach: Press the Windows key, type 'chrome' or your default browser name, press Enter, click on the address bar, type 'github.com', and press Enter.
 
-- Learned Task: Open github in my Browser(Comet), Create a new repository named "Jarvis-Fable", then push this "C:\Users\Administrator\Downloads\My projects\Folders\Claude Fable 5\Jarvis" Folder to that repository
-  Successful Plan: Plan 1: Via Browser GUI and Git Bash
-  Approach: Open Comet browser, navigate to github.com, click the '+' icon to create a new repository named 'Jarvis-Fable' without initializing it. Copy the remote repository URL. Open Git Bash, navigate to 'C:\Users\Administrator\Downloads\My projects\Folders\Claude Fable 5\Jarvis', run 'git init', 'git add .', 'git commit -m "Initial commit"', 'git remote add origin <URL>', and 'git push -u origin main'.
+- Learned Task: 00:00
+  Successful Plan: Plan 2: Set Timer via Google Search in Browser
+  Approach: Press Win+R, type 'chrome' (or your default browser) and press Enter. In the address bar, type 'set timer for 0 seconds' or 'timer 00:00' and press Enter to use the built-in Google search timer.
 
-- Learned Task: Go to Content tab on the left side and then select shorts , The see my all shorts there
-  Successful Plan: Plan 1: Direct Navigation via Left Sidebar
-  Approach: Locate the left-hand navigation menu on the screen, click on the 'Content' tab, wait for the content page to load, and then click on the 'Shorts' sub-tab at the top of the content list to view all uploaded Shorts.
+- Learned Task: Jarvis delete all the timers
+  Successful Plan: Plan 1: Via Windows Clock App GUI
+  Approach: Press the Windows key, type 'Clock' and press Enter to open the Windows Clock app. Click on the 'Timer' tab in the left sidebar. For each active or saved timer, hover over it and click the 'Delete' (trash can) icon, or right-click and select 'Delete' until the list is empty.
 
-- Learned Task: Go to youtube and play me the latest video of Triggered Insaan
-  Successful Plan: Plan 1: Via Browser Search Bar
-  Approach: Open the default web browser, navigate to 'https://www.youtube.com', click on the search bar at the top, type 'Triggered Insaan', press Enter, click on the official channel link, navigate to the 'Videos' tab, and click on the very first (latest) video in the list to play it.
+- Learned Task: Can you go to GitHub
+  Successful Plan: Plan 1: Via Web Browser
+  Approach: Press the Win key, type 'chrome' or your default browser name, press Enter, then type 'github.com' into the address bar and press Enter.
 
-- Learned Task: Open Bolt.new , then login with google using any gmail account and then prompt him to make me a AI Chatbot App , Enhance that prompt as this is a very short prompt so now start
-  Successful Plan: Plan 1: Via Browser Address Bar and Manual Google OAuth
-  Approach: Open the default web browser, click the address bar, type 'https://bolt.new' and press Enter. Once the page loads, locate and click the 'Sign In' or 'Get Started' button. Select the 'Sign in with Google' option, enter the Gmail credentials when prompted, and complete the login. Finally, click the prompt input area, type 'Create an AI Chatbot App', click the 'Enhance' or 'Improve' prompt button within the Bolt.new interface to expand the prompt, and press Enter to generate the app.
+- Learned Task: Can you go to github and then go to my latest repository of my github account and analyze it and in the end tell me what you analyzed and what should be improved in it.
+  Successful Plan: Plan 1: Via Browser Navigation and Manual Inspection
+  Approach: Open the default web browser, navigate to 'https://github.com', log in if necessary, click on your profile icon to access 'Your repositories', select the most recently updated repository, manually inspect the codebase (including README, file structure, and key source files), and then write a comprehensive analysis with improvement recommendations.
 
-- Learned Task: Code me a 3D Car Racing Game for browser in my downloads folder
-  Successful Plan: Plan 1: Automated Python Script Generation
-  Approach: Open a terminal or command prompt, navigate to the Downloads folder, create a Python script that writes the HTML, CSS, and Three.js JavaScript code for a 3D racing game into an index.html file, and execute the script to generate the game files.
+- Learned Task: Edit, Edit it using the GitHub editing feature of the file
+  Successful Plan: Default Action Path
+  Approach: Execute the task directly using standard operations.
 
-- Learned Task: go to spotify in chrome , then go to my "Peace" Playlist on left side sidebar , then analyze my all songs in it and then add a song that you think would be good for that playlist
-  Successful Plan: Plan 1: Direct Web Navigation and Manual Search
-  Approach: 1. Open Google Chrome and navigate to 'https://open.spotify.com'.
-2. Click on the 'Peace' playlist located in the left sidebar under 'Playlists' or 'Your Library'.
-3. Scroll through the playlist to read and analyze the existing song titles, artists, and overall genre/vibe.
-4. Click the search bar at the top or the 'Add songs' search field within the playlist.
-5. Type a highly fitting song recommendation (e.g., a calming ambient or acoustic track like 'Weightless' by Marconi Union or 'Riverside' by Agnes Obel).
-6. Click the 'Add' button next to the recommended song to add it to the 'Peace' playlist.
+- Learned Task: Can you analyze this model fetcher file and list all the improvements that it should have?
+  Successful Plan: Plan 1: Direct File Analysis via Text Editor
+  Approach: Open the model fetcher file directly in a text editor or IDE (such as VS Code or Notepad++), read through the source code to identify architectural, performance, security, and style issues, and compile a structured list of recommended improvements.
+
+- Learned Task: run a full system diagnostic, generate a detailed report of hardware health, software versions, and security settings, then archive all log files from the past month into a compressed backup folder
+  Successful Plan: Direct Attempt
+  Approach: Execute the task directly using standard operations, choosing each action from the current screen state.
+
+- Learned Task: hey jarvis! , Go to github and analyze my all github repos and then plan a idea for my next project according to my exisitng repos and then go to lovable.app and prompt the AI to make me that app that you planned
+  Successful Plan: Plan 1: Browser-Based Automation via GitHub API
+  Approach: Open the browser, navigate to GitHub, and log in. Use the GitHub API or scrape the repositories page to extract the names, descriptions, and primary languages of all your repositories. Feed this list into an LLM (like ChatGPT or Claude) with a prompt to analyze your tech stack and suggest a complementary, high-value next project. Copy the generated project idea, navigate to lovable.app, and paste the prompt into the Lovable AI builder to start generating the app.

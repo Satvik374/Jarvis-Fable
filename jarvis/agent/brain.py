@@ -338,6 +338,7 @@ class GeminiVertexBrain(Brain):
             return self._cached_token, self.project_id
 
         # Try using google-auth library if installed
+        ga_error = ""
         try:
             import google.auth  # type: ignore
             import google.auth.transport.requests  # type: ignore
@@ -345,14 +346,19 @@ class GeminiVertexBrain(Brain):
             request = google.auth.transport.requests.Request()
             credentials.refresh(request)
             self._cached_token = credentials.token
-            self.project_id = project or getattr(credentials, 'project_id', None)
+            # authorized_user creds carry no project, so fall back to the
+            # configured GOOGLE_CLOUD_PROJECT for the Vertex endpoint.
+            self.project_id = (project or getattr(credentials, 'project_id', None)
+                               or os.environ.get('GOOGLE_CLOUD_PROJECT'))
             self._token_expiry = time.time() + 3500
             if self._cached_token and self.project_id:
                 return self._cached_token, self.project_id
         except ImportError:
             pass
-        except Exception:
-            pass
+        except Exception as exc:
+            # Remember why google-auth failed so the final error is accurate
+            # (the manual fallback below only handles authorized_user creds).
+            ga_error = str(exc)
 
         # Manual parsing from ADC JSON
         adc_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
@@ -399,9 +405,13 @@ class GeminiVertexBrain(Brain):
                     err_msg = f": {e.read().decode()}"
                 raise BrainError(f"Failed to refresh access token using ADC credentials{err_msg}") from e
         else:
+            detail = f" (google-auth: {ga_error})" if ga_error else ""
             raise BrainError(
-                f"Unsupported ADC credential type '{cred_type}'. "
-                f"Please install the 'google-auth' package via: pip install google-auth"
+                f"The Application Default Credentials file at {adc_path} is not a "
+                f"valid Google credential (type={cred_type!r}){detail}. "
+                f"Run 'gcloud auth application-default login' to regenerate it, then "
+                f"'gcloud auth application-default set-quota-project <YOUR_PROJECT>'. "
+                f"Or switch to a local backend (set brain.backend: ollama in config.yaml)."
             )
 
     def complete(self, system: str, messages: list[dict], image=None) -> str:
@@ -511,3 +521,123 @@ class GeminiVertexBrain(Brain):
 
         raise BrainError(last_err + " (after 3 attempts)")
 
+    def transcribe_audio(self, wav_bytes: bytes, *,
+                         model: str | None = None) -> str:
+        """Speech-to-text: Gemini accepts audio natively, so voice input needs
+        no local speech model on this machine."""
+        import requests as _req  # type: ignore
+
+        access_token, project_id = self._get_access_token_and_project()
+        transcription_model = model or self.cfg.model
+        b64 = base64.b64encode(wav_bytes).decode("ascii")
+        if transcription_model.startswith("gemini-2.5"):
+            thinking_config = {"thinkingBudget": 0}
+        else:
+            thinking_config = {"thinkingLevel": "minimal"}
+        payload = {
+            "contents": [{"role": "user", "parts": [
+                {"text": "Transcribe this audio exactly as spoken. Reply with "
+                         "ONLY the transcribed text - no quotes, no commentary. "
+                         "If there is no intelligible speech, reply with an "
+                         "empty string."},
+                {"inlineData": {"mimeType": "audio/wav", "data": b64}},
+            ]}],
+            "generationConfig": {
+                "temperature": 0.0,
+                "maxOutputTokens": 128,
+                "thinkingConfig": thinking_config,
+            },
+        }
+        headers = {"Authorization": f"Bearer {access_token}",
+                   "Content-Type": "application/json"}
+        loc = getattr(self.cfg, "location", "global")
+        url = (f"https://aiplatform.googleapis.com/v1/projects/{project_id}"
+               f"/locations/{loc}/publishers/google/models/"
+               f"{transcription_model}:generateContent")
+        r = _req.post(url, json=payload, headers=headers,
+                      timeout=self.cfg.request_timeout)
+        if not r.ok:
+            raise BrainError(f"transcription HTTP {r.status_code}: {r.text[:200]}")
+        candidates = r.json().get("candidates", [])
+        if not candidates:
+            return ""
+        parts = candidates[0].get("content", {}).get("parts", [])
+        return "".join(p.get("text", "") for p in parts
+                       if isinstance(p, dict) and not p.get("thought")).strip()
+
+    def synthesize_speech(self, text: str, *, model: str, voice_name: str,
+                          language_code: str = "en-US") -> bytes:
+        """Generate 24 kHz, mono, signed 16-bit PCM with a Gemini TTS model.
+
+        ``model`` is supplied explicitly so speech generation can never
+        accidentally replace or mutate ``self.cfg.model``, the thinking model.
+        """
+        import requests as _req  # type: ignore
+
+        access_token, project_id = self._get_access_token_and_project()
+        speech_config: dict[str, Any] = {
+            "voiceConfig": {
+                "prebuiltVoiceConfig": {"voiceName": voice_name}
+            }
+        }
+        if language_code:
+            speech_config["languageCode"] = language_code
+        payload = {
+            "contents": [{
+                "role": "user",
+                "parts": [{
+                    "text": (
+                        "Read the following exactly as written in a warm, "
+                        f"clear, natural assistant voice:\n{text}"
+                    )
+                }],
+            }],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": speech_config,
+            },
+        }
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+        loc = getattr(self.cfg, "location", "global")
+        url = (
+            "https://aiplatform.googleapis.com/v1beta1/projects/"
+            f"{project_id}/locations/{loc}/publishers/google/models/"
+            f"{model}:generateContent"
+        )
+        try:
+            response = _req.post(
+                url,
+                json=payload,
+                headers=headers,
+                timeout=self.cfg.request_timeout,
+            )
+        except Exception as exc:
+            raise BrainError(
+                f"Vertex AI Gemini TTS request failed: {exc}"
+            ) from exc
+        if not response.ok:
+            raise BrainError(
+                "Vertex AI Gemini TTS returned HTTP "
+                f"{response.status_code}: {response.text[:500]}"
+            )
+
+        candidates = response.json().get("candidates", [])
+        parts = (
+            candidates[0].get("content", {}).get("parts", [])
+            if candidates else []
+        )
+        audio_chunks = []
+        for part in parts:
+            inline_data = (
+                part.get("inlineData") or part.get("inline_data") or {}
+                if isinstance(part, dict) else {}
+            )
+            encoded = inline_data.get("data")
+            if encoded:
+                audio_chunks.append(base64.b64decode(encoded))
+        if not audio_chunks:
+            raise BrainError("Gemini TTS returned no audio data")
+        return b"".join(audio_chunks)

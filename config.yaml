@@ -1,6 +1,7 @@
 # Jarvis configuration.  Defaults are tuned for RTX 2050 / 4 GB VRAM / 8 GB RAM.
 # Environment variables (JARVIS_BACKEND, JARVIS_MODEL, JARVIS_BASE_URL,
-# JARVIS_VISION, JARVIS_CONFIRM) override anything here.
+# JARVIS_TTS_MODEL, JARVIS_TTS_VOICE, JARVIS_TTS_LANGUAGE, JARVIS_VISION,
+# JARVIS_STT_MODEL, JARVIS_VOICE, JARVIS_CONFIRM) override anything here.
 
 brain:
   # backend: gemini | ollama | hf | llamacpp | openai | anthropic
@@ -29,6 +30,18 @@ perception:
   use_ocr: false      # OCR fallback for canvases/games (installs easyocr+torch)
   max_elements: 60    # cap on elements shown to the model (keeps prompt small)
   save_screenshots: true   # annotated shots saved for debugging + dataset
+
+# Gemini speech uses its own model and never replaces the thinking model above.
+voice:
+  model: gemini-3.1-flash-tts-preview
+  voice: Kore
+  language_code: en-US
+  transcription_model: gemini-2.5-flash-lite
+  silence_after: 0.6
+
+# Voice mode (Gemini TTS + Gemini STT). Toggle live with ':voice on|off'
+# or launch with --voice.
+voice_enabled: false
 
 safety:
   confirm_each_action: false  # set true while you build trust in the model

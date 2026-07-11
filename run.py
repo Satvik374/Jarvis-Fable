@@ -36,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--adapter", help="path to a trained LoRA adapter (hf backend)")
     parser.add_argument("--base-url", dest="base_url", help="override backend base URL")
     parser.add_argument("--vision", action="store_true", help="send screenshots to the model")
+    parser.add_argument("--voice", action="store_true", help="speak replies aloud (and voice input in console)")
     parser.add_argument("--confirm", action="store_true", help="confirm each action")
     parser.add_argument("--steps", type=int, help="max steps per task")
     parser.add_argument("--check", action="store_true", help="run an environment check and exit")
@@ -52,6 +53,8 @@ def main(argv: list[str] | None = None) -> int:
         cfg.brain.base_url = args.base_url
     if args.vision:
         cfg.brain.use_vision = True
+    if args.voice:
+        cfg.voice_enabled = True
     if args.confirm:
         cfg.safety.confirm_each_action = True
     if args.steps:
@@ -70,6 +73,10 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         result = agent.run(" ".join(args.task))
         log.jarvis(result)
+        if cfg.voice_enabled:
+            from jarvis.utils import voice
+            voice.configure(agent.brain, cfg.voice)
+            voice.speak(result, wait=True)   # sync: don't exit mid-sentence
         return 0
 
     from jarvis.console import repl
@@ -98,7 +105,8 @@ def run_check(cfg) -> int:
         ok = ok and (present or mod in {"yaml", "psutil"})
 
     for mod, why in [("easyocr", "OCR fallback (optional, heavy)"),
-                     ("pyperclip", "clipboard (optional)")]:
+                     ("pyperclip", "clipboard (optional)"),
+                     ("sounddevice", "microphone input for voice mode")]:
         (log.ok if _has(mod) else log.info)(
             f"{'found ' if _has(mod) else 'absent'} {mod:<14} - {why}")
 

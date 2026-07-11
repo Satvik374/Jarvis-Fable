@@ -75,18 +75,62 @@ python run.py "open notepad and type Hello, then save as hello.txt"
 python run.py --check               # verify environment + backend
 ```
 
+### Run it from anywhere with the `jarvis` command
+
+To start Jarvis by typing `jarvis` in any terminal (from any directory) instead
+of `python run.py`, add this project's `bin/` folder to your PATH once:
+
+```powershell
+# PowerShell (persists for your user; open a NEW terminal afterwards)
+$bin = "$PWD\bin"
+$p = [Environment]::GetEnvironmentVariable('Path','User')
+if (($p -split ';') -notcontains $bin) {
+    [Environment]::SetEnvironmentVariable('Path', "$p;$bin", 'User')
+}
+```
+
+Then, in a **new** terminal:
+```bash
+jarvis                       # interactive console, from any directory
+jarvis "open notepad and type Hello"
+jarvis --check               # verify environment + backend
+```
+
+`bin/jarvis.bat` is self-locating (`%~dp0`), so the command keeps working even
+if you move the project — just re-point PATH at the new `bin/` folder. It prefers
+the Windows `py` launcher and falls back to `python`.
+
 Inside the console:
 ```
 you > open the calculator and compute 24 times 7
 you > :confirm on          # ask before every action (recommended at first)
+you > :voice on            # Gemini speech input + Gemini TTS output
 you > :help
 ```
 
+### Gemini voice mode
+
+Voice output uses the dedicated `gemini-3.1-flash-tts-preview` model through
+Vertex AI. It is configured separately from the thinking model, so
+`brain.model: gemini-3.5-flash` remains unchanged.
+Voice transcription uses the lower-latency `gemini-2.5-flash-lite` model with
+thinking disabled and a shorter end-of-speech delay.
+
+Authenticate with Application Default Credentials before using voice mode:
+
+```bash
+gcloud auth application-default login
+```
+
+The TTS model, prebuilt voice, and language can be changed under `voice:` in
+`config.yaml`, or with `JARVIS_TTS_MODEL`, `JARVIS_TTS_VOICE`, and
+`JARVIS_TTS_LANGUAGE`. The transcription model can be overridden with
+`JARVIS_STT_MODEL`. Launch with `python run.py --voice` or use `:voice on`.
+
 > **Safety:** start with `:confirm on` (or `python run.py --confirm`) so you
-> approve each action while you learn how the model behaves. Move the mouse to a
-> screen corner to trigger pyautogui's failsafe abort. Shell commands matching a
-> denylist (format, del /, shutdown, …) are refused; file writes are sandboxed
-> to your home directory.
+> approve each action while you learn how the model behaves. Shell commands
+> matching a denylist (format, del /, shutdown, …) are refused; file writes are
+> sandboxed to your home directory.
 
 ---
 
@@ -101,6 +145,7 @@ you > :help
 | `jarvis/agent/loop.py` | The perceive→think→act loop. |
 | `jarvis/agent/trajectory.py` | Logs every real run as training data (`dataset/data/trajectories/`). |
 | `jarvis/tools/registry.py` | Resolves element→coordinate and executes actions. |
+| `jarvis/utils/voice.py` | Gemini TTS playback plus microphone recording for Gemini transcription. |
 | `jarvis/console.py`, `run.py` | Console REPL and CLI launcher. |
 
 Configuration lives in `config.yaml` (env vars `JARVIS_*` override it).

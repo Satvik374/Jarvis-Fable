@@ -98,8 +98,13 @@ def _resolve_point(args: dict, obs: Observation,
                 best_el = el
         if best_el is not None:
             return best_el.center
-        return raw_x, raw_y
-    return None
+        # Reject off-screen/garbage coordinates: a huge value overflows the
+        # Win32 C int in SetCursorPos ("argument 2: int too long to convert")
+        # and kills the whole run.
+        sw, sh = obs.screen_size
+        if 0 <= raw_x < sw and 0 <= raw_y < sh:
+            return raw_x, raw_y
+        return None
 
 
 # --------------------------------------------------------------------------- #
@@ -109,37 +114,37 @@ def _resolve_point(args: dict, obs: Observation,
 def _h_click(args, obs, cfg):
     pt = _resolve_point(args, obs)
     if pt is None:
-        return ActionResult(False, "click needs a valid element id or x,y")
-    count = max(1, int(args.get("count", 1)))
+        return ActionResult(False, "click needs a valid element id or on-screen x,y")
+    count = max(1, min(10, int(args.get("count", 1))))
     return ActionResult(True, mouse.click(*pt, clicks=count))
 
 
 def _h_double_click(args, obs, cfg):
     pt = _resolve_point(args, obs)
     if pt is None:
-        return ActionResult(False, "double_click needs a valid element id or x,y")
+        return ActionResult(False, "double_click needs a valid element id or on-screen x,y")
     return ActionResult(True, mouse.double_click(*pt))
 
 
 def _h_triple_click(args, obs, cfg):
     pt = _resolve_point(args, obs)
     if pt is None:
-        return ActionResult(False, "triple_click needs a valid element id or x,y")
+        return ActionResult(False, "triple_click needs a valid element id or on-screen x,y")
     return ActionResult(True, mouse.triple_click(*pt))
 
 
 def _h_right_click(args, obs, cfg):
     pt = _resolve_point(args, obs)
     if pt is None:
-        return ActionResult(False, "right_click needs a valid element id or x,y")
+        return ActionResult(False, "right_click needs a valid element id or on-screen x,y")
     return ActionResult(True, mouse.right_click(*pt))
 
 
 def _h_move(args, obs, cfg):
-    if args.get("x") is None or args.get("y") is None:
-        return ActionResult(False, "move needs x and y")
-    return ActionResult(True, mouse.move(int(args["x"]), int(args["y"])),
-                        needs_observe=False)
+    pt = _resolve_point(args, obs)
+    if pt is None:
+        return ActionResult(False, "move needs on-screen x,y coordinates")
+    return ActionResult(True, mouse.move(*pt), needs_observe=False)
 
 
 def _h_drag(args, obs, cfg):
@@ -151,8 +156,11 @@ def _h_drag(args, obs, cfg):
 
 
 def _h_scroll(args, obs, cfg):
-    return ActionResult(True, mouse.scroll(int(args.get("dy", 3)),
-                                           int(args.get("dx", 0))))
+    # Clamp: dy*120 goes raw into mouse_event's C int dwData - a huge model
+    # value overflows it the same way as bad coordinates.
+    dy = max(-50, min(50, int(args.get("dy", 3))))
+    dx = max(-50, min(50, int(args.get("dx", 0))))
+    return ActionResult(True, mouse.scroll(dy, dx))
 
 
 def _h_type(args, obs, cfg):
@@ -246,6 +254,37 @@ def _h_make_dir(args, obs, cfg):
     )
 
 
+def _h_system_status(args, obs, cfg):
+    return ActionResult(True, system.system_status(), needs_observe=False)
+
+
+def _h_web_search(args, obs, cfg):
+    query = str(args.get("query", ""))
+    if not query:
+        return ActionResult(False, "web_search needs a query", needs_observe=False)
+    results = system.web_search(query, int(args.get("max_results", 5) or 5))
+    return ActionResult(True, results, needs_observe=False)
+
+
+def _h_schedule_task(args, obs, cfg):
+    from .. import scheduler
+    sched = scheduler.get_default()
+    if sched is None:
+        return ActionResult(False, "scheduling is only available in the "
+                            "interactive console session", needs_observe=False)
+    schedule = str(args.get("schedule", ""))
+    command = str(args.get("command", ""))
+    if not schedule or not command:
+        return ActionResult(False, "schedule_task needs 'schedule' and 'command'",
+                            needs_observe=False)
+    try:
+        job = sched.add(schedule, command)
+    except scheduler.ScheduleError as exc:
+        return ActionResult(False, str(exc), needs_observe=False)
+    return ActionResult(True, f"scheduled job {job.id}: {job.spec} -> {command!r}",
+                        needs_observe=False)
+
+
 def _h_clipboard_read(args, obs, cfg):
     return ActionResult(True, "clipboard: " + system.clipboard_read(),
                         needs_observe=False)
@@ -291,6 +330,9 @@ _HANDLERS = {
     "focus_window": _h_focus_window,
     "open_url": _h_open_url,
     "run_command": _h_run_command,
+    "system_status": _h_system_status,
+    "web_search": _h_web_search,
+    "schedule_task": _h_schedule_task,
     "read_file": _h_read_file,
     "write_file": _h_write_file,
     "make_dir": _h_make_dir,

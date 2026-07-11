@@ -89,7 +89,7 @@ def observe(max_elements: int = 60, use_uia: bool = True,
 
     if use_uia:
         try:
-            elements = _detect_uia(max_elements, size)
+            elements = _detect_uia(max_elements, size, window_title=active)
         except Exception:
             elements = []
 
@@ -112,7 +112,24 @@ def _active_window_title() -> str:
         return ""
 
 
-def _detect_uia(max_elements: int, size: tuple[int, int]) -> list[Element]:
+def _title_match(window_title: str, doc_name: str) -> bool:
+    """True when the browser Document plausibly belongs to the active tab.
+
+    Window title is usually '<tab title> - <browser>'; the Document name is
+    the tab title. Chromium sometimes serves a STALE tree (previous tab, old
+    fullscreen-era coordinates) whose Document name no longer matches - the
+    signature of the click-lands-on-the-tab-strip bug.
+    """
+    import re
+    strip = lambda s: re.sub(r"^\(\d+\)\s*", "", (s or "").strip().lower())
+    win, doc = strip(window_title), strip(doc_name)
+    if not win or not doc:
+        return True     # nothing to compare - assume fine
+    return win.startswith(doc[:60])
+
+
+def _detect_uia(max_elements: int, size: tuple[int, int],
+                window_title: str = "") -> list[Element]:
     """Walk the UI Automation tree of the foreground window.
 
     Browsers (and Electron apps) nest the actual page content deep inside a
@@ -148,7 +165,8 @@ def _detect_uia(max_elements: int, size: tuple[int, int]) -> list[Element]:
     _MAX_CHROME = 18        # element budget for non-document (window chrome)
     _CHROME_DEPTH = 12
     _DOC_DEPTH = 45         # web pages nest deeply
-    _MAX_VISITED = 6000
+    _MAX_VISITED = 2500     # hard node cap (each node = several slow COM calls)
+    _TIME_BUDGET = 2.5      # wall-clock cap per walk so a huge page can't hang
 
     sw, sh = size
 
@@ -167,11 +185,14 @@ def _detect_uia(max_elements: int, size: tuple[int, int]) -> list[Element]:
         chrome_count = 0
         doc_found = False
         doc_kept = 0
+        doc_name = ""
 
         # queue holds (control, depth, in_document)
         queue: deque = deque([(root, 0, False)])
         visited = 0
-        while queue and len(elements) < max_elements and visited < _MAX_VISITED:
+        deadline = time.time() + _TIME_BUDGET
+        while (queue and len(elements) < max_elements
+               and visited < _MAX_VISITED and time.time() < deadline):
             ctrl, depth, in_doc = queue.popleft()
             visited += 1
             try:
@@ -188,11 +209,24 @@ def _detect_uia(max_elements: int, size: tuple[int, int]) -> list[Element]:
             cx, cy = (left + right) // 2, (top + bottom) // 2
             on_screen = (w > 3 and h > 3 and w < sw and h <= sh
                          and 0 <= cx < sw and 0 <= cy < sh)
+            # A node whose (valid) box is entirely outside the viewport - e.g.
+            # scrolled below the fold - has all its descendants off-screen too,
+            # so we never descend into it. This skips the whole below-the-fold
+            # DOM, the main cost on long pages.
+            valid_rect = right > left and bottom > top
+            fully_offscreen = valid_rect and (right <= 0 or bottom <= 0
+                                              or left >= sw or top >= sh)
+
+            # Name is a cross-process COM call; only fetch it when it can matter
+            # (a keepable interactive node, or the Document we must name-match).
             name = ""
-            try:
-                name = (ctrl.Name or "").strip()
-            except Exception:
-                pass
+            if role in _INTERACTIVE_ROLES or is_doc:
+                try:
+                    name = (ctrl.Name or "").strip()
+                except Exception:
+                    pass
+                if is_doc and not doc_name:
+                    doc_name = name
 
             keep = (role in _INTERACTIVE_ROLES and on_screen
                     and (name or role in _KEEP_UNNAMED))
@@ -217,7 +251,7 @@ def _detect_uia(max_elements: int, size: tuple[int, int]) -> list[Element]:
                     chrome_count += 1
 
             limit = _DOC_DEPTH if (in_doc or is_doc) else _CHROME_DEPTH
-            if depth < limit:
+            if depth < limit and not fully_offscreen:
                 try:
                     children = ctrl.GetChildren()
                 except Exception:
@@ -231,8 +265,14 @@ def _detect_uia(max_elements: int, size: tuple[int, int]) -> list[Element]:
                     for child in children:
                         queue.append((child, depth + 1, False))
 
-        if doc_found and doc_kept == 0 and attempt == 0:
+        if attempt == 0 and doc_found and doc_kept == 0:
             time.sleep(0.6)     # let the renderer finish building the a11y tree
+            continue
+        if attempt == 0 and doc_found and not _title_match(window_title, doc_name):
+            # Chromium served a STALE tree (an old tab's page, often with
+            # fullscreen-era coordinates) - clicking it hits the tab strip.
+            # Give the renderer a moment and walk again.
+            time.sleep(0.8)
             continue
         break
 

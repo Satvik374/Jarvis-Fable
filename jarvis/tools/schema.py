@@ -186,6 +186,33 @@ ACTIONS: tuple[Action, ...] = (
     ),
     # ---- clipboard -------------------------------------------------------
     Action(
+        "system_status", "Report machine diagnostics (CPU, memory, disk, "
+        "battery, uptime). Use to answer 'how's my system / battery / cpu / "
+        "memory / disk' without opening any app.", (),
+        category="system", examples=({},),
+    ),
+    Action(
+        "web_search", "Search the web with DuckDuckGo and get back text "
+        "results (an instant answer plus top links). Use to look something up "
+        "and answer directly, without opening a browser.",
+        (Param("query", "str", "What to search for."),
+         Param("max_results", "int", "How many results (default 5).",
+               required=False, default=5)),
+        category="system",
+        examples=({"query": "who won the 2022 world cup"},
+                  {"query": "python read a file", "max_results": 3}),
+    ),
+    Action(
+        "schedule_task", "Schedule a task to run automatically later or on a "
+        "repeat (a cron job). schedule accepts 'every N minutes/hours', 'daily "
+        "at HH:MM', 'in N minutes', or 'at HH:MM' (24h).",
+        (Param("schedule", "str", "When to run, e.g. 'daily at 08:00'."),
+         Param("command", "str", "The task to run when it fires.")),
+        category="system",
+        examples=({"schedule": "daily at 08:00", "command": "search the web for today's news"},
+                  {"schedule": "every 30 minutes", "command": "tell me the system status"}),
+    ),
+    Action(
         "clipboard_read", "Read the current clipboard text.", (),
         category="system", examples=({},),
     ),

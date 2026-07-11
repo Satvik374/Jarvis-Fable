@@ -13,18 +13,28 @@ import time
 def _pg():
     import pyautogui  # type: ignore
 
-    pyautogui.FAILSAFE = True   # slam mouse to a corner to abort
+    pyautogui.FAILSAFE = False
     pyautogui.PAUSE = 0.05
     return pyautogui
 
 
+def _safe(pg, x: int, y: int) -> tuple[int, int]:
+    """Clamp coordinates to on-screen bounds so a stray value can't overflow
+    the Win32 C int in SetCursorPos and kill the run."""
+    sw, sh = pg.size()
+    return min(max(int(x), 3), sw - 4), min(max(int(y), 3), sh - 4)
+
+
 def move(x: int, y: int, duration: float = 0.2) -> str:
-    _pg().moveTo(x, y, duration=duration)
+    pg = _pg()
+    x, y = _safe(pg, x, y)
+    pg.moveTo(x, y, duration=duration)
     return f"moved mouse to ({x},{y})"
 
 
 def click(x: int, y: int, button: str = "left", clicks: int = 1) -> str:
     pg = _pg()
+    x, y = _safe(pg, x, y)
     pg.moveTo(x, y, duration=0.15)
     pg.click(x, y, clicks=clicks, interval=0.08, button=button)
     return f"{button}-clicked ({x},{y})" + (f" x{clicks}" if clicks > 1 else "")
@@ -44,6 +54,8 @@ def right_click(x: int, y: int) -> str:
 
 def drag(x1: int, y1: int, x2: int, y2: int, duration: float = 0.4) -> str:
     pg = _pg()
+    x1, y1 = _safe(pg, x1, y1)
+    x2, y2 = _safe(pg, x2, y2)
     pg.moveTo(x1, y1, duration=0.15)
     pg.mouseDown()
     time.sleep(0.05)

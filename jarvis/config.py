@@ -98,11 +98,27 @@ class DataConfig:
 
 
 @dataclass
+class VoiceConfig:
+    # Gemini TTS is deliberately separate from the thinking model above.
+    model: str = "gemini-3.1-flash-tts-preview"
+    voice: str = "Kore"
+    language_code: str = "en-US"
+    # Fast, non-agentic model used only for speech-to-text.
+    transcription_model: str = "gemini-2.5-flash-lite"
+    # Stop recording promptly after the user finishes speaking.
+    silence_after: float = 0.6
+
+
+@dataclass
 class Config:
     brain: BrainConfig = field(default_factory=BrainConfig)
     perception: PerceptionConfig = field(default_factory=PerceptionConfig)
     safety: SafetyConfig = field(default_factory=SafetyConfig)
     data: DataConfig = field(default_factory=DataConfig)
+    voice: VoiceConfig = field(default_factory=VoiceConfig)
+    # Voice mode: speak replies aloud (Gemini TTS) and allow spoken commands
+    # (mic -> Gemini transcription). Toggle at runtime with ':voice on|off'.
+    voice_enabled: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -142,6 +158,8 @@ def load_config(path: Path | str | None = None) -> Config:
         _apply(cfg.perception, data.get("perception", {}))
         _apply(cfg.safety, data.get("safety", {}))
         _apply(cfg.data, data.get("data", {}))
+        _apply(cfg.voice, data.get("voice", {}))
+        cfg.voice_enabled = bool(data.get("voice_enabled", cfg.voice_enabled))
 
     # Environment overrides for the most common knobs.
     env = os.environ
@@ -153,6 +171,14 @@ def load_config(path: Path | str | None = None) -> Config:
         cfg.brain.base_url = v
     if v := env.get("JARVIS_LOCATION") or env.get("LOCATION"):
         cfg.brain.location = v
+    if v := env.get("JARVIS_TTS_MODEL"):
+        cfg.voice.model = v
+    if v := env.get("JARVIS_TTS_VOICE"):
+        cfg.voice.voice = v
+    if v := env.get("JARVIS_TTS_LANGUAGE"):
+        cfg.voice.language_code = v
+    if v := env.get("JARVIS_STT_MODEL"):
+        cfg.voice.transcription_model = v
     if v := env.get("JARVIS_API_KEY") or env.get("API_KEY") or env.get("OPENAI_API_KEY"):
         cfg.brain.api_key = v
         # Ensure it is set in environment for standard libraries
@@ -168,6 +194,8 @@ def load_config(path: Path | str | None = None) -> Config:
 
     if env.get("JARVIS_VISION") in {"1", "true", "True"}:
         cfg.brain.use_vision = True
+    if env.get("JARVIS_VOICE") in {"1", "true", "True"}:
+        cfg.voice_enabled = True
     if env.get("JARVIS_CONFIRM") in {"1", "true", "True"}:
         cfg.safety.confirm_each_action = True
     return cfg
