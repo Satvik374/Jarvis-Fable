@@ -113,8 +113,10 @@ Rules:
   5. To open a website, use open_url with the full URL (e.g.
      {"action":"open_url","args":{"url":"https://www.youtube.com"}}).
      NEVER click the browser address bar and type a URL by hand.
-  6. After clicking a text box or search field, your NEXT action must be type,
-     and then press enter to submit.
+  6. Click a text box, message box or search field exactly ONCE. One click
+     focuses it even if the screen looks unchanged - clicking it again does
+     nothing. Your NEXT action must be type, then press enter to submit.
+     NEVER click the same text box twice in a row.
   7. Never repeat an action whose RESULT said the screen did not change. If the
      same action failed twice, it will fail forever - pick a different element,
      scroll, or take a different approach.
